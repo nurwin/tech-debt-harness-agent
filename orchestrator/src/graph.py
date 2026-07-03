@@ -27,6 +27,7 @@ from .agents.planner import planner
 from .agents.terminal import aborted, finalizer
 from .agents.verifier import route_after_verifier, verifier
 from .state import HarnessState
+from .telemetry.trace import init_tracing, run_span, traced_node
 
 # Generous ceiling: worst case (2 steps × 3 iterations × 2 nodes, + gates + retry)
 # is ~25 node executions; the guardrail that actually bounds cost is MAX_ITERATIONS.
@@ -34,15 +35,14 @@ RECURSION_LIMIT = 100
 
 
 def build_graph(checkpointer: SqliteSaver | None = None):
+    init_tracing()  # no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set
     g = StateGraph(HarnessState)
-    g.add_node("planner", planner)
-    g.add_node("plan_gate", plan_gate)
-    g.add_node("executor", executor)
-    g.add_node("verifier", verifier)
-    g.add_node("escalation_gate", escalation_gate)
-    g.add_node("merge_gate", merge_gate)
-    g.add_node("finalizer", finalizer)
-    g.add_node("aborted", aborted)
+    for name, fn in [
+        ("planner", planner), ("plan_gate", plan_gate), ("executor", executor),
+        ("verifier", verifier), ("escalation_gate", escalation_gate),
+        ("merge_gate", merge_gate), ("finalizer", finalizer), ("aborted", aborted),
+    ]:
+        g.add_node(name, traced_node(name, fn))
 
     g.add_edge(START, "planner")
     g.add_edge("planner", "plan_gate")
@@ -66,13 +66,15 @@ def thread_config(thread_id: str) -> dict:
 
 def start_run(graph, state: HarnessState) -> dict:
     """Invoke a fresh run to its first interrupt or END."""
-    return graph.invoke(state, thread_config(state["thread_id"]))
+    with run_span("start", state["thread_id"]):
+        return graph.invoke(state, thread_config(state["thread_id"]))
 
 
 def resume_run(graph, thread_id: str, command: Command | None = None) -> dict:
     """Continue from the last checkpoint. command=None → crash recovery;
     command=Command(resume=decision) → human gate decision."""
-    return graph.invoke(command, thread_config(thread_id))
+    with run_span("resume", thread_id):
+        return graph.invoke(command, thread_config(thread_id))
 
 
 def get_state_values(graph, thread_id: str) -> dict[str, Any] | None:
