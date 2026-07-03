@@ -84,10 +84,27 @@ class LocalWorkspace(Workspace):
         return self._run(sys.executable, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider")
 
     def run_lint(self) -> CmdResult:
-        return self._run(sys.executable, "-m", "ruff", "check", ".", "--no-cache")
+        return self._run(sys.executable, "-m", "ruff", "check", ".", "--no-cache",
+                         "--output-format", "concise")
+
+    def list_files(self, suffix: str = ".py") -> list[str]:
+        skip = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv"}
+        return sorted(
+            str(p.relative_to(self.root))
+            for p in self.root.rglob(f"*{suffix}")
+            if not (skip & set(p.relative_to(self.root).parts))
+        )
 
     def diff(self) -> str:
         return self._git("diff", BASELINE_REF).stdout
+
+    def commit(self, message: str) -> None:
+        self._git("add", "-A")
+        self._git("commit", "-qm", message, "--allow-empty")
+
+    def discard_uncommitted(self) -> None:
+        self._git("reset", "--hard", "-q", "HEAD")
+        self._git("clean", "-fdq")
 
     def rollback(self) -> None:
         self._git("reset", "--hard", "-q", BASELINE_REF)

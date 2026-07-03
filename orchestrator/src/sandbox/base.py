@@ -40,8 +40,24 @@ class Workspace(ABC):
     def run_lint(self) -> CmdResult: ...
 
     @abstractmethod
+    def list_files(self, suffix: str = ".py") -> list[str]:
+        """Repo-relative source files (skips .git, caches, virtualenvs)."""
+        ...
+
+    @abstractmethod
     def diff(self) -> str:
         """Unified diff of the workspace vs the baseline commit."""
+        ...
+
+    @abstractmethod
+    def commit(self, message: str) -> None:
+        """Commit current workspace state — called after each VERIFIED step, so
+        accept_partial/rollback have step-granular ground truth."""
+        ...
+
+    @abstractmethod
+    def discard_uncommitted(self) -> None:
+        """Drop uncommitted changes (a failed attempt), keeping verified step commits."""
         ...
 
     @abstractmethod

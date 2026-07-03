@@ -21,6 +21,12 @@ def test_new_state_defaults():
     assert s["repo_path"] == "/workspace/tenant-a"
     assert s["host_repo_path"] == "/tmp/repo"
     assert s["auto_approve"] is False
+    assert s["executor_adapter"] == "dryrun"
+    assert s["workspace_kind"] == "local"
+    assert s["baseline_failed_tests"] == []
+    assert s["baseline_lint_errors"] == []
+    assert s["last_verification"] is None
+    assert s["human_guidance"] is None
     assert s["plan"] == []
     assert s["current_step"] == 0
     assert s["completed_steps"] == []

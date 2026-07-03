@@ -169,17 +169,21 @@ class DryRunAdapter(ExecutorAdapter):
 
 
 class FlakyAdapter(DryRunAdapter):
-    """Writes a broken near-miss for the first `fail_times` attempts on each step,
-    then the correct fix — drives the verifier's self-correction loop."""
+    """Writes a broken near-miss for the first `fail_times` attempts on each step
+    (or only on `only_step` if given), then the correct fix — drives the
+    verifier's self-correction loop."""
 
     name = "flaky"
 
-    def __init__(self, fail_times: int = 2) -> None:
+    def __init__(self, fail_times: int = 2, only_step: int | None = None) -> None:
         super().__init__()
         self.fail_times = fail_times
+        self.only_step = only_step
         self._attempts: dict[int, int] = {}
 
     def _content_for(self, step: PlanStep) -> str:
+        if self.only_step is not None and step.step_id != self.only_step:
+            return KNOWN_FIXES[step.file]
         attempt = self._attempts.get(step.step_id, 0)
         self._attempts[step.step_id] = attempt + 1
         if attempt < self.fail_times:
