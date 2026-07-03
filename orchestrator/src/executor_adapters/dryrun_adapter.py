@@ -152,7 +152,8 @@ class DryRunAdapter(ExecutorAdapter):
         self.calls: list[int] = []
 
     def apply_step(self, workspace: Workspace, step: PlanStep,
-                   prior_error: ErrorRecord | None) -> ExecutorResult:
+                   prior_error: ErrorRecord | None,
+                   guidance: str | None = None) -> ExecutorResult:
         self.calls.append(step.step_id)
         content = self._content_for(step)
         workspace.write_file(step.file, content)

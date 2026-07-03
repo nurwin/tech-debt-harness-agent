@@ -46,7 +46,7 @@ def build_graph(checkpointer: SqliteSaver | None = None):
 
     g.add_edge(START, "planner")
     g.add_edge("planner", "plan_gate")
-    g.add_edge("executor", "verifier")
+    # executor emits Command(goto=verifier | escalation_gate) — no static edge
     g.add_conditional_edges("verifier", route_after_verifier,
                             ["executor", "merge_gate", "escalation_gate"])
     g.add_edge("finalizer", END)

@@ -30,7 +30,9 @@ class ExecutorAdapter(ABC):
         workspace: Workspace,
         step: PlanStep,
         prior_error: ErrorRecord | None,
+        guidance: str | None = None,
     ) -> ExecutorResult:
         """Apply one plan step to the workspace. `prior_error` carries the structured
-        failure from the previous verification iteration on retries."""
+        failure from the previous verification iteration on retries; `guidance` is
+        optional human text granted with an escalation-gate retry."""
         ...

@@ -74,7 +74,9 @@ def verifier(state: HarnessState) -> dict:
             "iteration_count": 0,
             "human_guidance": None,  # consumed by the successful attempt
             "last_verification": verification,
-            "status": "executing" if more else "finalizing",
+            # plan exhausted → next stop is the merge gate
+            "status": "executing" if more else "awaiting_human",
+            "pending_approval": None if more else "merge",
         }
 
     record = ErrorRecord(
@@ -86,12 +88,14 @@ def verifier(state: HarnessState) -> dict:
         lint_errors=new_lint_errors if not is_final else lint_errors,
     )
     plan[state["current_step"]] = step.model_copy(update={"status": "failed"})
+    exhausted = state["iteration_count"] + 1 >= MAX_ITERATIONS
     return {
         "plan": plan,
         "error_log": state["error_log"] + [record],
         "iteration_count": state["iteration_count"] + 1,
         "last_verification": verification,
-        "status": "executing",
+        "status": "awaiting_human" if exhausted else "executing",
+        "pending_approval": "escalation" if exhausted else None,
     }
 
 
