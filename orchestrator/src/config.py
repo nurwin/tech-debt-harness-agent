@@ -31,6 +31,10 @@ def sandbox_image() -> str:
     return os.environ.get("SANDBOX_IMAGE", "refactor-harness-executor:latest")
 
 
+def jaeger_ui_url() -> str:
+    return os.environ.get("JAEGER_UI_URL", "http://localhost:16686").rstrip("/")
+
+
 def runs_root() -> str:
     """Host directory under which per-run workspace copies are created."""
     return os.environ.get("RUNS_ROOT", ".runs")
