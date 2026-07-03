@@ -1,0 +1,59 @@
+# Prod topology: ONE Kubernetes Job per (tenant, run) replaces the local
+# docker-socket spawn. The orchestrator creates this Job via the K8s API,
+# templating TENANT_ID / THREAD_ID. Isolation controls mirror the docker flags:
+# non-root, read-only root fs, no capabilities, no privilege escalation, no SA
+# token, resource limits, and a per-tenant PVC so filesystems never overlap.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: refactor-run-{{THREAD_ID}}
+  labels:
+    app: refactor-harness-executor
+    tenant: "{{TENANT_ID}}"
+    run: "{{THREAD_ID}}"
+spec:
+  backoffLimit: 0            # retries are the graph's job (MAX_ITERATIONS), not K8s's
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: refactor-harness-executor
+        tenant: "{{TENANT_ID}}"
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: executor
+          image: refactor-harness-executor:latest
+          command: ["sleep", "infinity"]   # driven via exec by the orchestrator
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: harness-provider-keys
+                  key: anthropic-api-key
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { memory: "256Mi", cpu: "250m" }
+            limits: { memory: "512Mi", cpu: "1" }
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace/{{TENANT_ID}}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: workspace-{{TENANT_ID}}-{{THREAD_ID}}  # per-run PVC, never shared
+        - name: tmp
+          emptyDir: {}

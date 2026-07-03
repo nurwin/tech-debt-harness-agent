@@ -1,0 +1,44 @@
+# Stateless orchestrator API workers. All run state lives in the checkpointer
+# (Postgres in prod — swap SqliteSaver for PostgresSaver, one line in graph.py),
+# so replicas scale horizontally and ANY worker can resume ANY run.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refactor-harness-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: refactor-harness-api
+  template:
+    metadata:
+      labels:
+        app: refactor-harness-api
+    spec:
+      serviceAccountName: harness-run-manager   # RBAC: may create/watch Jobs only
+      containers:
+        - name: api
+          image: refactor-harness-orchestrator:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: CHECKPOINT_DB_URL          # PostgresSaver DSN in prod
+              valueFrom:
+                secretKeyRef:
+                  name: harness-db
+                  key: dsn
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://jaeger-collector:4318
+          resources:
+            requests: { memory: "512Mi", cpu: "500m" }
+            limits: { memory: "1Gi", cpu: "2" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: refactor-harness-api
+spec:
+  selector:
+    app: refactor-harness-api
+  ports:
+    - port: 8000

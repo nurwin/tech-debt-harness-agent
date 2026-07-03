@@ -1,0 +1,20 @@
+# Orchestrator API image. Needs the docker CLI so the Sandbox class can spawn
+# per-run executor containers over the host's docker socket (dev/demo topology;
+# prod replaces this with a K8s Job per run — see infra/k8s/).
+FROM python:3.12-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY orchestrator/pyproject.toml /app/
+COPY orchestrator/src /app/src
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# test-fixtures and the runs volume are mounted by docker-compose
+ENV CHECKPOINT_DB=/data/checkpoints/harness.sqlite \
+    RUNS_ROOT=/data/runs
+
+EXPOSE 8000
+CMD ["uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8000"]

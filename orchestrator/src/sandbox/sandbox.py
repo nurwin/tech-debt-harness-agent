@@ -86,7 +86,7 @@ class Sandbox(Workspace):
             "--security-opt", "no-new-privileges",
             "--memory", "512m", "--cpus", "1.0",
             *env_args,
-            "-v", f"{self.host_repo_path}:{self.repo_path}:rw",
+            "-v", f"{config.translate_to_host_path(str(self.host_repo_path))}:{self.repo_path}:rw",
             "--workdir", self.repo_path,
             self.image, "sleep", "infinity",
         ]

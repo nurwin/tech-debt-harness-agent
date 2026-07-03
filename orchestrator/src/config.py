@@ -36,5 +36,26 @@ def jaeger_ui_url() -> str:
 
 
 def runs_root() -> str:
-    """Host directory under which per-run workspace copies are created."""
+    """Directory under which per-run workspace copies are created."""
     return os.environ.get("RUNS_ROOT", ".runs")
+
+
+def target_repo() -> str | None:
+    """Default tenant repo the API clones per run (None → vendored fixture)."""
+    return os.environ.get("TARGET_REPO") or None
+
+
+def translate_to_host_path(path: str) -> str:
+    """Docker-in-docker shim: when the orchestrator itself runs in a container,
+    sandbox `-v` mounts resolve on the HOST, so a workspace under RUNS_ROOT must
+    be re-prefixed with HOST_RUNS_ROOT (the host bind source of RUNS_ROOT).
+    A no-op outside compose (HOST_RUNS_ROOT unset)."""
+    host_root = os.environ.get("HOST_RUNS_ROOT")
+    if not host_root:
+        return path
+    from pathlib import Path
+
+    p, root = Path(path).resolve(), Path(runs_root()).resolve()
+    if p.is_relative_to(root):
+        return str(Path(host_root) / p.relative_to(root))
+    return path

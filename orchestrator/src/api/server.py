@@ -97,7 +97,7 @@ def create_app(checkpoint_db: str | None = None, runs_root: str | None = None,
 
     db_path = checkpoint_db or config.checkpoint_db_path()
     runs_dir = Path(runs_root or config.runs_root()).resolve()
-    repo_src = Path(target_repo or DEFAULT_TARGET_REPO).resolve()
+    repo_src = Path(target_repo or config.target_repo() or DEFAULT_TARGET_REPO).resolve()
 
     checkpointer = open_checkpointer(db_path)
     graph = build_graph(checkpointer)
