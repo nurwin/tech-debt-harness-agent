@@ -34,6 +34,7 @@ export default function RunList({
   const [tenant, setTenant] = useState("tenant-a");
   const [adapter, setAdapter] = useState("dryrun");
   const [autoApprove, setAutoApprove] = useState(false);
+  const [repoUrl, setRepoUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -41,7 +42,7 @@ export default function RunList({
     setBusy(true);
     setErr(null);
     try {
-      const { thread_id } = await api.startRun(tenant, autoApprove, adapter);
+      const { thread_id } = await api.startRun(tenant, autoApprove, adapter, repoUrl.trim());
       onStarted(thread_id);
     } catch (e) {
       setErr(String(e));
@@ -74,6 +75,18 @@ export default function RunList({
             <option value="alwaysfail">alwaysfail (demo abort-at-3 + rollback)</option>
             <option value="pi">pi (real executor in Docker sandbox)</option>
           </select>
+        </label>
+        <label className="block text-xs text-slate-400">
+          Import from GitHub (optional)
+          <input
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            placeholder="https://github.com/owner/repo — public repos only"
+            className="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1.5 text-sm placeholder:text-slate-600"
+          />
+          <span className="mt-1 block text-[11px] text-slate-500">
+            empty = vendored fixture · imported repos run in the Docker sandbox
+          </span>
         </label>
         <label className="flex items-center gap-2 text-xs text-slate-400">
           <input

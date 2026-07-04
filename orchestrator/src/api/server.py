@@ -10,6 +10,7 @@ Design notes:
 """
 import asyncio
 import json
+import shutil
 import threading
 import urllib.parse
 import uuid
@@ -20,7 +21,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.types import Command
 
-from .. import config
+from .. import config, repo_import
 from ..graph import (
     build_graph,
     get_state_values,
@@ -161,7 +162,33 @@ def create_app(checkpoint_db: str | None = None, runs_root: str | None = None,
         if req.executor_adapter == "pi" and not config.anthropic_api_key():
             raise HTTPException(400, "executor_adapter=pi requires ANTHROPIC_API_KEY")
         thread_id = f"run-{uuid.uuid4().hex[:12]}"
-        host_path = prepare_workspace(repo_src, runs_dir, req.tenant_id, thread_id)
+
+        # An imported repo is untrusted code, so it may only ever run inside the
+        # Docker sandbox — never LocalWorkspace on this host (CLAUDE.md rule 2).
+        source = repo_src
+        clone_dir: Path | None = None
+        if req.repo_url:
+            from ..sandbox.sandbox import docker_available, image_available
+
+            if not (docker_available() and image_available(config.sandbox_image())):
+                raise HTTPException(
+                    400,
+                    "imported repos run only inside the Docker sandbox; Docker and "
+                    f"the {config.sandbox_image()!r} image are required",
+                )
+            # "." is not a valid tenant_id, so .imports never collides with a tenant dir
+            clone_dir = runs_dir / ".imports" / thread_id
+            try:
+                source = repo_import.import_github_repo(req.repo_url, clone_dir)
+            except repo_import.RepoImportError as exc:
+                raise HTTPException(400, str(exc)) from exc
+
+        try:
+            host_path = prepare_workspace(source, runs_dir, req.tenant_id, thread_id)
+        finally:
+            if clone_dir is not None:  # the per-run workspace copy is what persists
+                shutil.rmtree(clone_dir, ignore_errors=True)
+
         state = new_state(
             thread_id=thread_id,
             tenant_id=req.tenant_id,
@@ -169,7 +196,9 @@ def create_app(checkpoint_db: str | None = None, runs_root: str | None = None,
             host_repo_path=str(host_path),
             auto_approve=req.auto_approve,
             executor_adapter=req.executor_adapter,
-            workspace_kind="docker" if req.executor_adapter == "pi" else "local",
+            workspace_kind="docker" if (req.executor_adapter == "pi" or req.repo_url)
+                           else "local",
+            source_repo_url=req.repo_url,
         )
         spawn(thread_id, state)
         return StartRunResponse(thread_id=thread_id, tenant_id=req.tenant_id,

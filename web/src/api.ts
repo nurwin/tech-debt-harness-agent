@@ -53,6 +53,7 @@ export interface PublicState {
   token_usage: TokenUsage;
   failure_reason: string | null;
   has_final_diff: boolean;
+  source_repo_url: string | null;
 }
 
 export interface RunSummary {
@@ -112,8 +113,10 @@ const post = (url: string, body: unknown) =>
 
 export const api = {
   listRuns: () => j<RunSummary[]>(fetch(`${BASE}/runs`)),
-  startRun: (tenant_id: string, auto_approve: boolean, executor_adapter: string) =>
-    j<{ thread_id: string }>(post(`${BASE}/runs`, { tenant_id, auto_approve, executor_adapter })),
+  startRun: (tenant_id: string, auto_approve: boolean, executor_adapter: string, repo_url?: string) =>
+    j<{ thread_id: string }>(
+      post(`${BASE}/runs`, { tenant_id, auto_approve, executor_adapter, repo_url: repo_url || null })
+    ),
   getState: (id: string) => j<PublicState>(fetch(`${BASE}/runs/${id}/state`)),
   getPending: (id: string) =>
     j<{ pending: PendingGate | null }>(fetch(`${BASE}/runs/${id}/pending`)),

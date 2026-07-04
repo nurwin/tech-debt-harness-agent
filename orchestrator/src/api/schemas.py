@@ -1,8 +1,9 @@
 """Pydantic models for every REST/WS boundary (CLAUDE.md §5 — typed external I/O)."""
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from ..repo_import import validate_github_url
 from ..state import HarnessState, coerce_errors, coerce_plan
 
 
@@ -10,6 +11,16 @@ class StartRunRequest(BaseModel):
     tenant_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     auto_approve: bool = False
     executor_adapter: Literal["dryrun", "flaky", "alwaysfail", "pi"] = "dryrun"
+    # Optional: import the target from a public GitHub repo instead of the
+    # configured fixture. Canonicalized here so a bad URL is a 422, not a clone.
+    repo_url: str | None = None
+
+    @field_validator("repo_url")
+    @classmethod
+    def _github_public_only(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return validate_github_url(value)
 
 
 class StartRunResponse(BaseModel):
@@ -74,6 +85,7 @@ class PublicState(BaseModel):
     token_usage: dict[str, int]
     failure_reason: str | None
     has_final_diff: bool
+    source_repo_url: str | None = None
 
 
 def to_public(state: HarnessState) -> PublicState:
@@ -83,6 +95,8 @@ def to_public(state: HarnessState) -> PublicState:
         status=state["status"],
         auto_approve=state["auto_approve"],
         executor_adapter=state["executor_adapter"],
+        # .get: runs checkpointed before this field existed lack the key
+        source_repo_url=state.get("source_repo_url"),
         plan=[s.model_dump() for s in coerce_plan(state["plan"])],
         current_step=state["current_step"],
         completed_steps=state["completed_steps"],

@@ -61,6 +61,16 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[de
 (see `.env.example`), rebuild compose, and start a run with adapter `pi`. The planner
 switches to a real LLM call and the executor drives Pi over RPC inside the sandbox.
 
+**Importing a target from GitHub:** the start form (and `POST /runs`) takes an
+optional `repo_url` — a **public GitHub repo only** (`https://github.com/{owner}/{repo}`;
+every other host/scheme/credential form is rejected with a 422). The API
+shallow-clones it (prompts and credential helpers disabled, so a private repo
+fails fast instead of hanging), copies it into the per-run workspace, and deletes
+the clone. An imported repo is untrusted code, so imported runs **always verify
+inside the Docker sandbox** regardless of adapter — never on the orchestrator
+host; without Docker the import is refused. Pair it with adapter `pi` for real
+refactors (the dryrun adapters only know the vendored fixture's files).
+
 ## The three stages
 
 1. **Planner** (read-only): captures the verification baseline (the target repo ships

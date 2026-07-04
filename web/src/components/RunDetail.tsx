@@ -77,6 +77,17 @@ export default function RunDetail({
         <StatusBadge status={state.status} />
         <span className="text-xs text-slate-400">tenant: {state.tenant_id}</span>
         <span className="text-xs text-slate-400">adapter: {state.executor_adapter}</span>
+        {state.source_repo_url && (
+          <a
+            href={state.source_repo_url.replace(/\.git$/, "")}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-sky-400 hover:underline"
+            title="target repo imported from GitHub"
+          >
+            imported ↗
+          </a>
+        )}
         {state.auto_approve && <span className="text-xs text-amber-400">auto-approve</span>}
         <a
           href={traceUrl}

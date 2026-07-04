@@ -71,6 +71,7 @@ class HarnessState(TypedDict):
     auto_approve: bool
     executor_adapter: str  # "dryrun" | "flaky" | "alwaysfail" | "pi" (per-run selection)
     workspace_kind: str  # "local" (dryrun/CI) | "docker" (Pi in the sandbox)
+    source_repo_url: str | None  # provenance: GitHub URL the target was imported from
 
     # Planning
     plan: list[PlanStep]
@@ -113,6 +114,7 @@ def new_state(
     auto_approve: bool = False,
     executor_adapter: str = "dryrun",
     workspace_kind: str = "local",
+    source_repo_url: str | None = None,
 ) -> HarnessState:
     return HarnessState(
         thread_id=thread_id,
@@ -122,6 +124,7 @@ def new_state(
         auto_approve=auto_approve,
         executor_adapter=executor_adapter,
         workspace_kind=workspace_kind,
+        source_repo_url=source_repo_url,
         plan=[],
         current_step=0,
         completed_steps=[],
