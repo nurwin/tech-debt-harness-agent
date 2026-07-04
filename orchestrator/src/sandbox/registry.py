@@ -5,6 +5,7 @@ persisted state alone — after a crash, get_workspace(state) reconstructs the h
 from (tenant_id, thread_id, host_repo_path, workspace_kind); the on-disk workspace
 and its git baseline survive the process.
 """
+from .. import config
 from ..state import HarnessState
 from .base import Workspace
 from .local import LocalWorkspace
@@ -19,7 +20,16 @@ def get_workspace(state: HarnessState) -> Workspace:
         if state.get("workspace_kind", "local") == "docker":
             from .sandbox import Sandbox  # deferred: dryrun path never imports docker code
 
-            ws = Sandbox(state["tenant_id"], tid, state["host_repo_path"])
+            # Only a Pi sandbox gets LLM egress + credentials; verification-only
+            # docker workspaces (e.g. imported repos on dryrun adapters) stay
+            # --network none with no secrets inside.
+            is_pi = state.get("executor_adapter") == "pi"
+            ws = Sandbox(
+                state["tenant_id"], tid, state["host_repo_path"],
+                allow_egress=is_pi,
+                anthropic_api_key=config.anthropic_api_key() if is_pi else None,
+                anthropic_base_url=config.anthropic_base_url() if is_pi else None,
+            )
             ws.start()
         else:
             ws = LocalWorkspace(state["tenant_id"], tid, state["host_repo_path"])

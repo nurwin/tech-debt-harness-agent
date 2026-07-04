@@ -15,6 +15,7 @@ import json
 import subprocess
 from typing import Any
 
+from .. import config
 from ..agents.prompts import EXECUTOR_SYSTEM, executor_step_prompt
 from ..sandbox.base import Workspace
 from ..sandbox.sandbox import Sandbox
@@ -84,6 +85,32 @@ def harvest_usage(event: dict[str, Any]) -> int:
     return found
 
 
+def pi_launch_args() -> tuple[str, ...]:
+    """Provider/model flags for the pi CLI (`--provider`, `--model` — verified
+    in `pi --help` at the pinned version). The provider is pinned to anthropic:
+    this harness authenticates with ANTHROPIC_API_KEY (+ optional
+    ANTHROPIC_BASE_URL for compatible endpoints like Xiaomi MiMo Token Plan),
+    and pi's default provider is NOT anthropic. LLM_MODEL overrides the model
+    (e.g. mimo-v2.5-pro); unset keeps pi's default anthropic model."""
+    args: tuple[str, ...] = ("--provider", "anthropic")
+    model = config.llm_model()
+    if model:
+        args += ("--model", model)
+    return args
+
+
+def pi_models_json() -> str | None:
+    """models.json content overriding pi's built-in anthropic provider baseUrl
+    (docs/models.md "Overriding Built-in Providers"). This is the mechanism that
+    actually works: verified empirically that pi IGNORES the ANTHROPIC_BASE_URL
+    env var (requests still hit api.anthropic.com) but honors this file, which
+    the sandbox writes to $HOME/.pi/agent/models.json before launching pi."""
+    base_url = config.anthropic_base_url()
+    if not base_url:
+        return None
+    return json.dumps({"providers": {"anthropic": {"baseUrl": base_url}}})
+
+
 class PiAdapter(ExecutorAdapter):
     name = "pi"
 
@@ -108,7 +135,8 @@ class PiAdapter(ExecutorAdapter):
         prompt = EXECUTOR_SYSTEM + "\n\n" + executor_step_prompt(
             step.file, step.rationale, file_content, prior_text, guidance)
 
-        client = PiRpcClient(workspace.start_pi_rpc())
+        client = PiRpcClient(workspace.start_pi_rpc(extra_args=pi_launch_args(),
+                                                    models_json=pi_models_json()))
         client.send({"type": "prompt", "message": prompt})
 
         tokens = 0

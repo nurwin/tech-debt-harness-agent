@@ -47,7 +47,8 @@ def image_available(image: str) -> bool:
 class Sandbox(Workspace):
     def __init__(self, tenant_id: str, thread_id: str, host_repo_path: str | Path,
                  image: str | None = None, allow_egress: bool = False,
-                 anthropic_api_key: str | None = None):
+                 anthropic_api_key: str | None = None,
+                 anthropic_base_url: str | None = None):
         self.tenant_id = tenant_id
         self.thread_id = thread_id
         self.host_repo_path = Path(host_repo_path).resolve()
@@ -56,6 +57,7 @@ class Sandbox(Workspace):
         self.image = image or config.sandbox_image()
         self.allow_egress = allow_egress
         self._api_key = anthropic_api_key
+        self._base_url = anthropic_base_url
         self.name = f"sbx-{_safe(tenant_id)}-{_safe(thread_id)}"
         self.net_name = f"{self.name}-net"
         self.repo_path = f"/workspace/{tenant_id}"
@@ -73,9 +75,6 @@ class Sandbox(Workspace):
             subprocess.run(["docker", "network", "create", self.net_name],
                            capture_output=True, timeout=30)
             net_args = ["--network", self.net_name]
-        env_args = ["-e", "HOME=/tmp"]  # non-root user has no homedir; git needs one
-        if self._api_key and self.allow_egress:
-            env_args += ["-e", f"ANTHROPIC_API_KEY={self._api_key}"]
         cmd = [
             "docker", "run", "-d",
             "--name", self.name,
@@ -85,7 +84,7 @@ class Sandbox(Workspace):
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
             "--memory", "512m", "--cpus", "1.0",
-            *env_args,
+            *self._env_args(),
             "-v", f"{config.translate_to_host_path(str(self.host_repo_path))}:{self.repo_path}:rw",
             "--workdir", self.repo_path,
             self.image, "sleep", "infinity",
@@ -95,6 +94,17 @@ class Sandbox(Workspace):
             raise RuntimeError(f"sandbox start failed: {proc.stderr.strip()}")
         self._started = True
         self._ensure_git_baseline()
+
+    def _env_args(self) -> list[str]:
+        args = ["-e", "HOME=/tmp"]  # non-root user has no homedir; git needs one
+        # Credentials only ever enter an egress-enabled (Pi) sandbox. The base
+        # URL env is informational for in-container tooling; pi itself ignores
+        # it — its endpoint override is the models.json written by start_pi_rpc.
+        if self._api_key and self.allow_egress:
+            args += ["-e", f"ANTHROPIC_API_KEY={self._api_key}"]
+            if self._base_url:
+                args += ["-e", f"ANTHROPIC_BASE_URL={self._base_url}"]
+        return args
 
     def teardown(self) -> None:
         if self._pi_proc is not None and self._pi_proc.poll() is None:
@@ -184,13 +194,26 @@ class Sandbox(Workspace):
 
     # -- Pi (Phase C) ----------------------------------------------------------
 
-    def start_pi_rpc(self, tools: str = "read,write,edit,bash") -> subprocess.Popen:
+    def start_pi_rpc(self, tools: str = "read,write,edit,bash",
+                     extra_args: tuple[str, ...] = (),
+                     models_json: str | None = None) -> subprocess.Popen:
         """Long-lived `pi --mode rpc` INSIDE the container (never on the host —
-        CLAUDE.md rule 2). Binary pipes: the RPC framing layer splits on \\n only."""
+        CLAUDE.md rule 2). Binary pipes: the RPC framing layer splits on \\n only.
+        `extra_args` (provider/model flags) and `models_json` (provider baseUrl
+        override, written to pi's agent dir) come from PiAdapter — the only
+        module that knows Pi's flags and config schema."""
         if self._pi_proc is None or self._pi_proc.poll() is not None:
+            if models_json is not None:
+                # $HOME is /tmp (tmpfs) — writable despite the read-only rootfs
+                res = self._exec("sh", "-c",
+                                 'mkdir -p "$HOME/.pi/agent" && printf %s '
+                                 f'{shlex.quote(models_json)}'
+                                 ' > "$HOME/.pi/agent/models.json"')
+                if not res.ok:
+                    raise RuntimeError(f"failed to write pi models.json: {res.stderr}")
             self._pi_proc = subprocess.Popen(
                 ["docker", "exec", "-i", "--workdir", self.repo_path, self.name,
-                 "pi", "--mode", "rpc", "--no-session", "--tools", tools],
+                 "pi", "--mode", "rpc", "--no-session", "--tools", tools, *extra_args],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
         return self._pi_proc

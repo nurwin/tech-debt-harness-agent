@@ -25,6 +25,9 @@ services:
       # docker-in-docker path shim: sandbox -v sources resolve on the HOST
       HOST_RUNS_ROOT: ${PWD}/.runs
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Anthropic-compatible endpoint override (e.g. Xiaomi MiMo Token Plan)
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./test-fixtures:/app/test-fixtures:ro # pristine, read-only

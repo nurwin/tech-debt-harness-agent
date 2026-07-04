@@ -119,6 +119,10 @@ class _StubSandbox(LocalWorkspace):
     """Stands in for Sandbox so the imported-run path is testable offline.
     Signature and start() match what the workspace registry calls."""
 
+    def __init__(self, tenant_id: str, thread_id: str, host_repo_path,
+                 **sandbox_kwargs) -> None:
+        super().__init__(tenant_id, thread_id, host_repo_path)
+
     def start(self) -> "_StubSandbox":
         return self
 

@@ -61,6 +61,35 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[de
 (see `.env.example`), rebuild compose, and start a run with adapter `pi`. The planner
 switches to a real LLM call and the executor drives Pi over RPC inside the sandbox.
 
+### Anthropic-compatible providers (e.g. Xiaomi MiMo Token Plan)
+
+Both LLM consumers — the orchestrator-side planner (Anthropic SDK) and the Pi
+executor inside the sandbox — honor an endpoint override, so any provider that
+speaks the Anthropic API schema works with two env vars (put them in `.env`,
+then `docker compose up -d --build`):
+
+```bash
+# Xiaomi MiMo Token Plan (subscription): tp-... key + regional endpoint
+ANTHROPIC_API_KEY=tp-your-token-plan-key
+ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic   # or -sgp / -ams
+LLM_MODEL=mimo-v2.5-pro
+
+# (MiMo pay-as-you-go instead: sk-... key + https://api.xiaomimimo.com/anthropic)
+```
+
+How the override flows: the planner passes `base_url`/`model` straight to its
+Anthropic client. For the executor, credentials only ever enter egress-enabled
+Pi sandboxes (verification sandboxes stay `--network none` with no secrets
+inside); there the harness writes pi's documented provider override —
+`$HOME/.pi/agent/models.json` with `{"providers": {"anthropic": {"baseUrl": …}}}`
+— before launching `pi --provider anthropic --model $LLM_MODEL`. That file is
+the mechanism that actually works: we verified empirically that pi *ignores*
+the `ANTHROPIC_BASE_URL` env var (requests still hit `api.anthropic.com`) but
+honors models.json, and that it accepts non-Claude model IDs ("using custom
+model id"). Unset both vars and everything defaults to `api.anthropic.com` +
+the stock Claude models. `LLM_MODEL` applies to planner and executor alike;
+there is deliberately no per-component split until a real need shows up.
+
 **Importing a target from GitHub:** the start form (and `POST /runs`) takes an
 optional `repo_url` — a **public GitHub repo only** (`https://github.com/{owner}/{repo}`;
 every other host/scheme/credential form is rejected with a 422). The API

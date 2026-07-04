@@ -113,9 +113,12 @@ def _llm_plan(workspace: Workspace) -> tuple[list[PlanStep], int]:
     listing = "\n\n".join(
         f"=== {path} ===\n{source}" for path, source in sorted(files.items())
     )
-    client = anthropic.Anthropic(api_key=config.anthropic_api_key())
+    # base_url=None → the SDK's default (api.anthropic.com); a set value points
+    # at any Anthropic-compatible endpoint (e.g. Xiaomi MiMo Token Plan).
+    client = anthropic.Anthropic(api_key=config.anthropic_api_key(),
+                                 base_url=config.anthropic_base_url())
     msg = client.messages.create(
-        model="claude-sonnet-5",
+        model=config.llm_model() or "claude-sonnet-5",
         max_tokens=2000,
         system=PLANNER_SYSTEM,
         messages=[{

@@ -23,6 +23,19 @@ def anthropic_api_key() -> str | None:
     return os.environ.get("ANTHROPIC_API_KEY") or None
 
 
+def anthropic_base_url() -> str | None:
+    """Anthropic-COMPATIBLE endpoint override (e.g. Xiaomi MiMo Token Plan:
+    https://token-plan-cn.xiaomimimo.com/anthropic). None → api.anthropic.com."""
+    return os.environ.get("ANTHROPIC_BASE_URL") or None
+
+
+def llm_model() -> str | None:
+    """Model ID for BOTH the planner and the Pi executor (e.g. mimo-v2.5-pro
+    on MiMo). None → per-component defaults (planner: claude-sonnet-5;
+    Pi: its built-in default)."""
+    return os.environ.get("LLM_MODEL") or None
+
+
 def otel_endpoint() -> str | None:
     return os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or None
 
